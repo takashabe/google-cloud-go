@@ -34,6 +34,7 @@ import (
 	"text/template"
 	"time"
 
+	"encoding/binary"
 	"encoding/csv"
 
 	"cloud.google.com/go/bigtable"
@@ -884,9 +885,18 @@ func printRow(r bigtable.Row) {
 		for _, ri := range ris {
 			ts := time.Unix(0, int64(ri.Timestamp)*1e3)
 			fmt.Printf("  %-40s @ %s\n", ri.Column, ts.Format("2006/01/02-15:04:05.000000"))
-			fmt.Printf("    %q\n", ri.Value)
+			if isBigendian(ri.Value) {
+				fmt.Printf("    %d\n", (int64)(binary.BigEndian.Uint64(ri.Value)))
+			} else {
+				fmt.Printf("    %q\n", ri.Value)
+			}
 		}
 	}
+}
+
+func isBigendian(b []byte) bool {
+	// TODO: かなり雑. 真面目に文字列判定とFloat判定したい
+	return len(b) == 8
 }
 
 type byColumn []bigtable.ReadItem
