@@ -25,6 +25,7 @@ import (
 	"go/format"
 	"io"
 	"log"
+	"math"
 	"os"
 	"regexp"
 	"sort"
@@ -879,22 +880,83 @@ func printRow(r bigtable.Row) {
 		fams = append(fams, fam)
 	}
 	sort.Strings(fams)
+	decoder := bigendianDecoder{
+		decode:        config.Decode,
+		decodeColumns: config.DecodeColumns,
+	}
 	for _, fam := range fams {
 		ris := r[fam]
 		sort.Sort(byColumn(ris))
 		for _, ri := range ris {
 			ts := time.Unix(0, int64(ri.Timestamp)*1e3)
 			fmt.Printf("  %-40s @ %s\n", ri.Column, ts.Format("2006/01/02-15:04:05.000000"))
-			if isBigendian(ri.Value) {
-				fmt.Printf("    %d\n", (int64)(binary.BigEndian.Uint64(ri.Value)))
-			} else {
-				fmt.Printf("    %q\n", ri.Value)
-			}
+			decoder.print(ri.Column, ri.Value)
 		}
 	}
 }
 
-func isBigendian(b []byte) bool {
+type bigendianDecoder struct {
+	decode        string
+	decodeColumns string
+}
+
+func (bd bigendianDecoder) print(c string, b []byte) {
+	// bigtable column format "columnFamily:columnName"
+	// extract columnName
+	c = c[strings.Index(c, ":")+1:]
+
+	// retrieve decode each columns
+	// decodeColumns format "column1:type1,column2:type2,..."
+	columns := strings.Split(bd.decodeColumns, ",")
+	for _, s := range columns {
+		if strings.HasPrefix(s, c) {
+			// expect: "column_name:decode_type"
+			column := strings.Split(s, ":")
+			if len(column) != 2 {
+				break
+			}
+			bd.doPrint(column[1], b)
+			return
+		}
+	}
+
+	// invoke general decode type
+	bd.doPrint(bd.decode, b)
+}
+
+func (bd bigendianDecoder) doPrint(decodeType string, b []byte) {
+	var (
+		fmtString = "string"
+		fmtInt    = "int"
+		fmtFloat  = "float"
+	)
+
+	switch decodeType {
+	case fmtInt:
+		fmt.Printf("    %d\n", bd.toInt(b))
+	case fmtFloat:
+		fmt.Printf("    %f\n", bd.toFloat(b))
+	case fmtString:
+		fmt.Printf("    %q\n", b)
+	default:
+		if bd.isBigendian(b) {
+			fmt.Printf("    %d\n", bd.toInt(b))
+		} else {
+			fmt.Printf("    %q\n", b)
+		}
+	}
+}
+
+func (bigendianDecoder) toInt(b []byte) int64 {
+	return (int64)(binary.BigEndian.Uint64(b))
+}
+
+func (bigendianDecoder) toFloat(b []byte) float64 {
+	bits := binary.BigEndian.Uint64(b)
+	return math.Float64frombits(bits)
+}
+
+func (bigendianDecoder) isBigendian(b []byte) bool {
 	// TODO: かなり雑. 真面目に文字列判定とFloat判定したい
 	return len(b) == 8
 }

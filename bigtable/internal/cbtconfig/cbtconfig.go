@@ -45,6 +45,8 @@ type Config struct {
 	AdminEndpoint     string                           // optional
 	DataEndpoint      string                           // optional
 	CertFile          string                           // optional
+	Decode            string                           // optional
+	DecodeColumns     string                           // optional
 	TokenSource       oauth2.TokenSource               // derived
 	TLSCreds          credentials.TransportCredentials // derived
 }
@@ -67,6 +69,8 @@ func (c *Config) RegisterFlags() {
 	flag.StringVar(&c.AdminEndpoint, "admin-endpoint", c.AdminEndpoint, "Override the admin api endpoint")
 	flag.StringVar(&c.DataEndpoint, "data-endpoint", c.DataEndpoint, "Override the data api endpoint")
 	flag.StringVar(&c.CertFile, "cert-file", c.CertFile, "Override the TLS certificates file")
+	flag.StringVar(&c.Decode, "decode", c.Decode, "Decode type for bigendian value")
+	flag.StringVar(&c.DecodeColumns, "decode-columns", c.DecodeColumns, "Decode type for bigendian value with columns")
 }
 
 // CheckFlags checks that the required config values are set.
@@ -140,6 +144,10 @@ func Load() (*Config, error) {
 			c.AdminEndpoint = val
 		case "data-endpoint":
 			c.DataEndpoint = val
+		case "decode":
+			c.Decode = val
+		case "decode-columns":
+			c.DecodeColumns = val
 		}
 
 	}
